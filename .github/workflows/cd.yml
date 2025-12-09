@@ -1,132 +1,47 @@
 # CD (Continuous Deployment) Workflow
-# This workflow automatically deploys the application after CI passes successfully
+# Simple deployment workflow that runs after CI passes
 
-name: CD  # Display name in GitHub Actions tab
+name: CD
 
-# Define when this workflow should run
+# Trigger only when CI workflow completes successfully
 on:
-  # Trigger only when another workflow completes
   workflow_run:
-    workflows: ["CI"]  # Wait for the "CI" workflow to complete
+    workflows: ["CI"]
     types:
-      - completed      # Trigger when CI workflow finishes (success or failure)
+      - completed
 
-# Define the deployment jobs
 jobs:
-  # Job ID: deploy
   deploy:
-    # Conditional: Only run this job if CI workflow was successful
+    # Only deploy if CI was successful
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
-    
-    # Specify the runner environment (GitHub-hosted Ubuntu VM)
     runs-on: ubuntu-latest
     
-    # Sequence of deployment steps
     steps:
-      # Step 1: Download the repository code to the runner
+      # Step 1: Checkout the repository
       - name: Checkout repository
-        uses: actions/checkout@v4  # Get the latest code from the repository
+        uses: actions/checkout@v4
 
-      # Step 2: Set up Node.js environment for deployment
+      # Step 2: Set up Node.js
       - name: Setup Node.js
-        uses: actions/setup-node@v4  # Official GitHub action for Node.js setup
+        uses: actions/setup-node@v4
         with:
-          node-version: 18  # Use Node.js version 18 for consistency
-          cache: 'npm'      # Cache npm dependencies for faster deployment
+          node-version: 18
+          cache: 'npm'
 
-      # Step 3: Install production dependencies only (excludes devDependencies)
+      # Step 3: Install production dependencies
       - name: Install dependencies
-        run: npm ci --only=production  # Install only production deps for smaller deployment
+        run: npm ci --only=production
 
-      # Step 4: Build the application (placeholder - customize based on your needs)
-      - name: Build application (placeholder)
-        run: |
-          echo "Build step - add build commands if needed"
-          # Examples of common build commands:
-          # npm run build          # Create production build
-          # npm run minify         # Minify JavaScript/CSS
-          # npm run optimize       # Optimize assets
-          # mkdir -p dist && cp -r src/* dist/  # Copy files to dist
+      # Step 4: Build application (if needed)
+      - name: Build application
+        run: echo "Build step - add build commands if needed"
 
-      # Step 5: Deploy to GitHub Pages (creates a 'deploy' branch with build artifacts)
-      - name: Push build to deploy branch
+      # Step 5: Deploy to GitHub Pages
+      - name: Deploy to GitHub Pages
         run: |
-          # Configure git with GitHub Actions bot credentials
           git config user.name "github-actions[bot]"
           git config user.email "actions@github.com"
-          
-          # Create or switch to deploy branch
           git checkout -b deploy || git checkout deploy
-          
-          # Add all files to staging (including build artifacts)
           git add -A
-          
-          # Commit changes (or skip if no changes)
-          git commit -m "Deploy: build from CI run ${{ github.run_number }}" || echo "No changes to commit"
-          
-          # Force push to deploy branch (overwrites previous deploy)
+          git commit -m "Deploy: build from CI run ${{ github.run_number }}" || echo "No changes"
           git push origin deploy --force
-
-      # Optional Step 6: Deploy to VPS server (uncomment and configure if needed)
-      # - name: Deploy to VPS
-      #   if: github.ref == 'refs/heads/main'  # Only deploy main branch to production
-      #   uses: appleboy/ssh-action@v0.1.5     # Third-party SSH action
-      #   with:
-      #     host: ${{ secrets.VPS_HOST }}       # Server IP (set in repository secrets)
-      #     username: ${{ secrets.VPS_USERNAME }} # SSH username (set in repository secrets)
-      #     key: ${{ secrets.VPS_SSH_KEY }}     # Private SSH key (set in repository secrets)
-      #     script: |
-      #       # Navigate to application directory on server
-      #       cd ${{ secrets.VPS_PATH }}
-      #       
-      #       # Pull latest changes from repository
-      #       git pull origin main
-      #       
-      #       # Install/update production dependencies
-      #       npm ci --only=production
-      #       
-      #       # Restart application using PM2 process manager
-      #       pm2 restart book-api || pm2 start server.js --name book-api
-      #       
-      #       # Wait for application to start
-      #       sleep 5
-      #       
-      #       # Perform health check to verify deployment success
-      #       curl -f http://localhost:5000/api/books || exit 1
-      #       
-      #       # Save PM2 configuration for auto-restart on reboot
-      #       pm2 save
-
-      # Optional Step 7: Deploy to cloud platforms (examples)
-      # - name: Deploy to Heroku
-      #   uses: akhileshns/heroku-deploy@v3.12.12
-      #   with:
-      #     heroku_api_key: ${{ secrets.HEROKU_API_KEY }}
-      #     heroku_app_name: "your-app-name"
-      #     heroku_email: "your-email@example.com"
-
-      # - name: Deploy to Vercel
-      #   uses: amondnet/vercel-action@v20
-      #   with:
-      #     vercel-token: ${{ secrets.VERCEL_TOKEN }}
-      #     vercel-org-id: ${{ secrets.ORG_ID }}
-      #     vercel-project-id: ${{ secrets.PROJECT_ID }}
-
-      # Optional Step 8: Send deployment notifications
-      # - name: Notify deployment success
-      #   if: success()
-      #   uses: 8398a7/action-slack@v3
-      #   with:
-      #     status: success
-      #     text: "✅ Deployment successful for commit ${{ github.sha }}"
-      #   env:
-      #     SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
-      
-      # - name: Notify deployment failure
-      #   if: failure() 
-      #   uses: 8398a7/action-slack@v3
-      #   with:
-      #     status: failure
-      #     text: "❌ Deployment failed for commit ${{ github.sha }}"
-      #   env:
-      #     SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}

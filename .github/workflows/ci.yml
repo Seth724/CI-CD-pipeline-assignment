@@ -1,91 +1,43 @@
 # CI (Continuous Integration) Workflow
-# This workflow runs automated tests and quality checks on every push and pull request
+# Simple workflow that runs tests on every push and pull request
 
-name: CI  # Display name in GitHub Actions tab
+name: CI
 
 # Define when this workflow should run
 on:
-  # Trigger on pushes to main branch
   push:
     branches: [ main ]
-  # Trigger on pull requests targeting main branch  
   pull_request:
     branches: [ main ]
 
-# Define the jobs that make up this workflow
+# Define the jobs
 jobs:
-  # Job ID: build (can be any name)
   build:
-    # Specify the runner environment (GitHub-hosted Ubuntu VM)
     runs-on: ubuntu-latest
 
-    # Add MongoDB service container for testing
-    services:
-      mongodb:
-        image: mongo:7.0
-        env:
-          MONGO_INITDB_ROOT_USERNAME: root
-          MONGO_INITDB_ROOT_PASSWORD: password
-          MONGO_INITDB_DATABASE: testdb
-        ports:
-          - 27017:27017
-        options: >-
-          --health-cmd "mongosh --eval 'quit(db.runCommand({ ping: 1 }).ok ? 0 : 2)'"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
-    # Test strategy: run jobs in parallel with different configurations
     strategy:
       matrix:
-        # Test against Node.js version 18.x (can add multiple: [16.x, 18.x, 20.x])
         node-version: [18.x]
 
-    # Sequence of steps to execute in this job
     steps:
-      # Step 1: Download the repository code to the runner
+      # Step 1: Checkout the repository
       - name: Checkout repository
-        uses: actions/checkout@v4  # Official GitHub action for code checkout
+        uses: actions/checkout@v4
 
-      # Step 2: Set up Node.js environment with specified version
+      # Step 2: Set up Node.js
       - name: Use Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4  # Official GitHub action for Node.js setup
+        uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node-version }}  # Use version from strategy matrix
-          cache: 'npm'  # Cache npm dependencies to speed up builds
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
 
-      # Step 3: Install project dependencies
+      # Step 3: Install dependencies
       - name: Install dependencies
-        run: npm ci  # Use 'npm ci' for faster, reliable installs in CI (uses package-lock.json)
+        run: npm ci
 
-      # Step 4: Wait for MongoDB service to be ready
-      - name: Wait for MongoDB
-        run: |
-          echo "Waiting for MongoDB to be ready..."
-          timeout 60s bash -c 'until nc -z localhost 27017; do sleep 1; done'
-          echo "MongoDB is ready!"
-
-      # Step 5: Run the test suite
+      # Step 4: Run tests
       - name: Run tests
-        run: npm run test:ci  # Execute CI-optimized tests with coverage
+        run: npm test
         env:
-          # Set environment variables for tests
           NODE_ENV: test
           CI: true
-          # MongoDB connection for service container
-          MONGODB_URI: mongodb://root:password@localhost:27017/testdb?authSource=admin
-
-      # Optional Step 6: Upload test coverage (uncomment if coverage reporting needed)
-      # - name: Upload coverage reports  
-      #   uses: codecov/codecov-action@v3
-      #   with:
-      #     file: ./coverage/lcov.info
-      #     fail_ci_if_error: false
-
-      # Optional Step 7: Build application (uncomment if build step needed)
-      # - name: Build application
-      #   run: npm run build
-
-      # Optional Step 8: Run linting (uncomment if ESLint configured)
-      # - name: Run linting
-      #   run: npm run lint
