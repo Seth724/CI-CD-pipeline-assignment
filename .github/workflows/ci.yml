@@ -19,6 +19,22 @@ jobs:
     # Specify the runner environment (GitHub-hosted Ubuntu VM)
     runs-on: ubuntu-latest
 
+    # Add MongoDB service container for testing
+    services:
+      mongodb:
+        image: mongo:7.0
+        env:
+          MONGO_INITDB_ROOT_USERNAME: root
+          MONGO_INITDB_ROOT_PASSWORD: password
+          MONGO_INITDB_DATABASE: testdb
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'quit(db.runCommand({ ping: 1 }).ok ? 0 : 2)'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     # Test strategy: run jobs in parallel with different configurations
     strategy:
       matrix:
@@ -42,25 +58,34 @@ jobs:
       - name: Install dependencies
         run: npm ci  # Use 'npm ci' for faster, reliable installs in CI (uses package-lock.json)
 
-      # Step 4: Run the test suite
+      # Step 4: Wait for MongoDB service to be ready
+      - name: Wait for MongoDB
+        run: |
+          echo "Waiting for MongoDB to be ready..."
+          timeout 60s bash -c 'until nc -z localhost 27017; do sleep 1; done'
+          echo "MongoDB is ready!"
+
+      # Step 5: Run the test suite
       - name: Run tests
-        run: npm test  # Execute tests defined in package.json scripts
+        run: npm run test:ci  # Execute CI-optimized tests with coverage
         env:
           # Set environment variables for tests
           NODE_ENV: test
-          # Note: Add MONGO_URI to repository secrets if database tests needed
+          CI: true
+          # MongoDB connection for service container
+          MONGODB_URI: mongodb://root:password@localhost:27017/testdb?authSource=admin
 
-      # Optional Step 5: Upload test coverage (uncomment if coverage reporting needed)
+      # Optional Step 6: Upload test coverage (uncomment if coverage reporting needed)
       # - name: Upload coverage reports  
       #   uses: codecov/codecov-action@v3
       #   with:
       #     file: ./coverage/lcov.info
       #     fail_ci_if_error: false
 
-      # Optional Step 6: Build application (uncomment if build step needed)
+      # Optional Step 7: Build application (uncomment if build step needed)
       # - name: Build application
       #   run: npm run build
 
-      # Optional Step 7: Run linting (uncomment if ESLint configured)
+      # Optional Step 8: Run linting (uncomment if ESLint configured)
       # - name: Run linting
       #   run: npm run lint
