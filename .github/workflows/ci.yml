@@ -1,0 +1,66 @@
+# CI (Continuous Integration) Workflow
+# This workflow runs automated tests and quality checks on every push and pull request
+
+name: CI  # Display name in GitHub Actions tab
+
+# Define when this workflow should run
+on:
+  # Trigger on pushes to main branch
+  push:
+    branches: [ main ]
+  # Trigger on pull requests targeting main branch  
+  pull_request:
+    branches: [ main ]
+
+# Define the jobs that make up this workflow
+jobs:
+  # Job ID: build (can be any name)
+  build:
+    # Specify the runner environment (GitHub-hosted Ubuntu VM)
+    runs-on: ubuntu-latest
+
+    # Test strategy: run jobs in parallel with different configurations
+    strategy:
+      matrix:
+        # Test against Node.js version 18.x (can add multiple: [16.x, 18.x, 20.x])
+        node-version: [18.x]
+
+    # Sequence of steps to execute in this job
+    steps:
+      # Step 1: Download the repository code to the runner
+      - name: Checkout repository
+        uses: actions/checkout@v4  # Official GitHub action for code checkout
+
+      # Step 2: Set up Node.js environment with specified version
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4  # Official GitHub action for Node.js setup
+        with:
+          node-version: ${{ matrix.node-version }}  # Use version from strategy matrix
+          cache: 'npm'  # Cache npm dependencies to speed up builds
+
+      # Step 3: Install project dependencies
+      - name: Install dependencies
+        run: npm ci  # Use 'npm ci' for faster, reliable installs in CI (uses package-lock.json)
+
+      # Step 4: Run the test suite
+      - name: Run tests
+        run: npm test  # Execute tests defined in package.json scripts
+        env:
+          # Set environment variables for tests
+          NODE_ENV: test
+          # Note: Add MONGO_URI to repository secrets if database tests needed
+
+      # Optional Step 5: Upload test coverage (uncomment if coverage reporting needed)
+      # - name: Upload coverage reports  
+      #   uses: codecov/codecov-action@v3
+      #   with:
+      #     file: ./coverage/lcov.info
+      #     fail_ci_if_error: false
+
+      # Optional Step 6: Build application (uncomment if build step needed)
+      # - name: Build application
+      #   run: npm run build
+
+      # Optional Step 7: Run linting (uncomment if ESLint configured)
+      # - name: Run linting
+      #   run: npm run lint
