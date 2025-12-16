@@ -105,74 +105,81 @@ project/
 
 ---
 
-## 🌐 VPS Deployment Setup
+## 🌐 Digital Ocean VPS Deployment Setup
 
-### Option 1: Digital Ocean / AWS / GCP VPS
+### Option 1: Digital Ocean VPS Deployment
 
-1. **Server Preparation**
+1. **Create Digital Ocean Droplet**
    ```bash
-   # Update system packages
-   sudo apt update && sudo apt upgrade -y
-   
-   # Install Node.js (NodeSource repository)
-   curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-   sudo apt-get install -y nodejs
-   
-   # Install PM2 globally for process management
-   sudo npm install -g pm2
-   
-   # Install Git
-   sudo apt install git -y
-   
-   # Create application directory
-   sudo mkdir -p /var/www/book-api
-   sudo chown -R $USER:$USER /var/www/book-api
+   # Create Ubuntu 20.04/22.04 LTS droplet
+   # Minimum: 1GB RAM, 1 vCPU ($6/month Basic plan)
+   # Choose region closest to your location
+   # Add SSH key for secure access
    ```
 
-2. **Application Deployment**
+2. **Initial Server Setup**
    ```bash
-   # Navigate to app directory
-   cd /var/www/book-api
+   # SSH into your droplet
+   ssh root@your-droplet-ip
    
+   # Run automated setup script
+   curl -sSL https://raw.githubusercontent.com/Seth724/CI-CD-pipeline-assignment/main/scripts/server-setup.sh | bash
+   ```
+
+3. **Manual Initial Deployment**
+   ```bash
    # Clone repository
+   cd /var/www/book-api
    git clone https://github.com/Seth724/CI-CD-pipeline-assignment.git .
    
-   # Install dependencies
-   npm install --production
-   
-   # Create production environment file
+   # Create environment file
    nano .env
    ```
 
-3. **Environment Configuration (.env)**
+   Add to `.env`:
    ```bash
-   MONGO_URI=mongodb+srv://username:password@cluster.mongodb.net/bookstore
+   MONGO_URI=mongodb+srv://username:password@cluster.mongodb.net/bookstore?retryWrites=true&w=majority
    PORT=5000
    NODE_ENV=production
    ```
 
-4. **PM2 Process Management**
    ```bash
-   # Start application with PM2
-   pm2 start server.js --name "book-api"
-   
-   # Save PM2 configuration
+   # Install dependencies and start
+   npm ci --only=production
+   mkdir -p logs
+   pm2 start ecosystem.config.js
    pm2 save
-   
-   # Setup PM2 to start on system reboot
    pm2 startup
-   
-   # Monitor application
-   pm2 status
-   pm2 logs book-api
    ```
 
-5. **Nginx Reverse Proxy (Optional)**
-   ```bash
-   # Install Nginx
-   sudo apt install nginx -y
+4. **Configure GitHub Secrets for Automated Deployment**
    
-   # Create Nginx configuration
+   Go to: Repository Settings → Secrets and Variables → Actions
+   
+   Add these secrets:
+   ```
+   DO_HOST=your.droplet.ip.address
+   DO_USERNAME=root
+   DO_SSH_KEY=your-private-ssh-key-content
+   DO_PORT=22
+   MONGO_URI=mongodb+srv://username:password@cluster.mongodb.net/bookstore
+   ```
+
+5. **Test Automated Deployment**
+   ```bash
+   # Make a change and push to main branch
+   git add .
+   git commit -m "Test deployment"
+   git push origin main
+   
+   # Check GitHub Actions tab for deployment status
+   # Your API will be available at: http://your-droplet-ip:5000
+   ```
+
+### Option 2: Nginx Reverse Proxy (Recommended for Production)
+
+1. **Configure Nginx**
+   ```bash
    sudo nano /etc/nginx/sites-available/book-api
    ```
    
@@ -198,33 +205,46 @@ project/
    ```bash
    # Enable the site
    sudo ln -s /etc/nginx/sites-available/book-api /etc/nginx/sites-enabled/
-   
-   # Test and restart Nginx
    sudo nginx -t
    sudo systemctl restart nginx
    ```
 
-### Option 2: Automated GitHub Actions Deployment
+### Automated GitHub Actions Deployment
 
-The project includes automated deployment via GitHub Actions that can deploy to your VPS:
+The CD pipeline automatically:
+- Triggers when CI passes on `main` branch
+- Connects to Digital Ocean VPS via SSH
+- Pulls latest code changes
+- Installs production dependencies
+- Updates environment variables
+- Restarts application with PM2
+- Performs health checks
+- Reports deployment status
 
-1. **Add VPS SSH secrets to GitHub repository:**
-   - Go to Repository Settings → Secrets and Variables → Actions
-   - Add the following secrets:
-     ```
-     VPS_HOST=your-server-ip
-     VPS_USERNAME=your-server-username
-     VPS_SSH_KEY=your-private-ssh-key
-     VPS_PATH=/var/www/book-api
-     MONGO_URI=your-mongodb-connection-string
-     ```
+### VPS Management Commands
 
-2. **The CD pipeline will automatically:**
-   - Connect to your VPS via SSH
-   - Pull the latest code
-   - Install dependencies
-   - Restart the PM2 process
-   - Run health checks
+```bash
+# Check application status
+pm2 status
+
+# View logs
+pm2 logs book-api
+
+# Restart application
+pm2 restart book-api
+
+# Stop application
+pm2 stop book-api
+
+# Monitor resources
+pm2 monit
+
+# Update application manually
+cd /var/www/book-api
+git pull origin main
+npm ci --only=production
+pm2 restart book-api
+```
 
 ---
 

@@ -1,58 +1,134 @@
-# CD (Continuous Deployment) Workflow
-# Simple deployment workflow that runs after CI passes
+# # CD (Continuous Deployment) Workflow
+# # Deploys to Digital Ocean VPS after CI passes
+
+# name: CD
+
+# # Trigger only when CI workflow completes successfully on main branch
+# on:
+#   workflow_run:
+#     workflows: ["CI"]
+#     types:
+#       - completed
+#     branches:
+#       - main
+
+# jobs:
+#   deploy:
+#     # Only deploy if CI was successful and on main branch
+#     if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' }}
+#     runs-on: ubuntu-latest
+    
+#     steps:
+#       # Step 1: Checkout the repository
+#       - name: Checkout repository
+#         uses: actions/checkout@v4
+
+#       # Step 2: Deploy to Digital Ocean VPS
+#       - name: Deploy to Digital Ocean
+#         uses: appleboy/ssh-action@v1.0.0
+#         with:
+#           host: ${{ secrets.DO_HOST }}
+#           username: ${{ secrets.DO_USERNAME }}
+#           key: ${{ secrets.DO_SSH_KEY }}
+#           port: ${{ secrets.DO_PORT || 22 }}
+#           script_stop: true
+#           script: |
+#             set -e
+#             echo "🚀 Starting deployment to Digital Ocean VPS..."
+            
+#             # Navigate to application directory
+#             cd /var/www/book-api
+            
+#             # Pull latest changes
+#             echo "📥 Pulling latest code..."
+#             git stash --include-untracked 2>/dev/null || true
+#             git pull origin main
+            
+#             # Install dependencies
+#             echo "📦 Installing dependencies..."
+#             npm ci --only=production
+            
+#             # Create environment file if it doesn't exist
+#             if [ ! -f ".env" ]; then
+#               echo "📝 Creating environment file..."
+#               echo "MONGO_URI=${{ secrets.MONGO_URI }}" > .env
+#               echo "PORT=5000" >> .env
+#               echo "NODE_ENV=production" >> .env
+#             fi
+            
+#             # Update environment variables
+#             echo "🔧 Updating environment variables..."
+#             sed -i "s|^MONGO_URI=.*|MONGO_URI=${{ secrets.MONGO_URI }}|g" .env
+            
+#             # Create logs directory
+#             mkdir -p logs
+            
+#             # Restart application with PM2
+#             echo "🔄 Restarting application..."
+#             pm2 stop book-api 2>/dev/null || true
+#             pm2 delete book-api 2>/dev/null || true
+#             pm2 start ecosystem.config.js
+#             pm2 save
+            
+#             # Health check
+#             echo "🏥 Performing health check..."
+#             sleep 10
+#             if curl -f http://localhost:5000/ > /dev/null 2>&1; then
+#               echo "✅ Deployment successful! Application is running."
+#               pm2 status
+#             else
+#               echo "❌ Deployment failed! Application is not responding."
+#               pm2 logs book-api --lines 20
+#               exit 1
+#             fi
+            
+#             echo "🎉 Deployment completed successfully!"
+
+#       # Step 3: Notify deployment status
+#       - name: Notify Deployment Success
+#         if: success()
+#         run: |
+#           echo "✅ Deployment to Digital Ocean completed successfully!"
+#           echo "🌐 Application is now live at: http://${{ secrets.DO_HOST }}:5000"
+
+#       # Step 4: Notify deployment failure
+#       - name: Notify Deployment Failure
+#         if: failure()
+#         run: |
+#           echo "❌ Deployment to Digital Ocean failed!"
+#           echo "Please check the logs and server status."
+
 
 name: CD
-
-# Trigger only when CI workflow completes successfully
 on:
   workflow_run:
     workflows: ["CI"]
-    types:
-      - completed
+    types: [completed]
+    branches: [main]
 
 jobs:
   deploy:
-    # Only deploy if CI was successful
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
-    runs-on: ubuntu-latest
-    
-    # Add permissions for GitHub token
-    permissions:
-      contents: write
-      pages: write
-      id-token: write
-    
+    runs-on: self-hosted
+
     steps:
-      # Step 1: Checkout the repository with token
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 0
-
-      # Step 2: Set up Node.js
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 18
-          cache: 'npm'
-
-      # Step 3: Install production dependencies
-      - name: Install dependencies
-        run: npm ci --only=production
-
-      # Step 4: Build application (if needed)
-      - name: Build application
-        run: echo "Build step - add build commands if needed"
-
-      # Step 5: Deploy to GitHub Pages
-      - name: Deploy to GitHub Pages
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Deploy on VPS (self-hosted)
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout -b deploy || git checkout deploy
-          git add -A
-          git commit -m "Deploy: build from CI run ${{ github.run_number }}" || echo "No changes"
-          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git deploy --force
+          set -e
+          cd /var/www/book-api
+
+          echo "📥 Reset to latest main..."
+          git fetch --all
+          git reset --hard origin/main
+
+          echo "📦 Install dependencies..."
+          npm ci --omit=dev
+
+          echo "🔄 Restart with PM2..."
+          pm2 start npm --name book-api -- start || pm2 restart book-api
+          pm2 save
+
+          echo "🏥 Health check..."
+          sleep 3
+          curl -f http://localhost:5000/health
+          echo "✅ Deploy successful"
