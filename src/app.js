@@ -13,6 +13,11 @@ app.use(express.json());
 
 connectDB();
 
+app.get('/health', (req, res) => {
+  res.status(200).send('ok');
+});
+
+
 app.get('/', (req, res) => {
   res.json({ message: 'API is running' });
 });
