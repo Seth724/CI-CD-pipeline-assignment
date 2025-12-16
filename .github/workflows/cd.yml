@@ -167,7 +167,8 @@ jobs:
 
       - name: Restart app with PM2
         run: |
-          pm2 describe book-api > /dev/null 2>&1 && pm2 restart book-api || pm2 start npm --name "book-api" -- start
+          pm2 stop book-api || true
+          pm2 start book-api
           pm2 save
 
     
