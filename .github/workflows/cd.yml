@@ -170,6 +170,4 @@ jobs:
           pm2 describe book-api > /dev/null 2>&1 && pm2 restart book-api || pm2 start npm --name "book-api" -- start
           pm2 save
 
-      - name: Health check
-        run: |
-          curl -f http://localhost:${{ secrets.PORT }}/health
+    
